@@ -1,10 +1,5 @@
 #!/bin/bash
 
-###### SOME LOOPHOLES PRESENT:
-#### KEEP PRODUCING HASH VALUES IF ALREADY PRODUCED
-#### CHECK TIME OF COMMIT INCLUDING BOTH DATE AND TIME -- RIGHT NOW ONLY WITH TIME
-
-
 # Define the command-line arguments
 command=$1
 args=("$@")
@@ -41,15 +36,19 @@ combine() {
     echo "$header" > main.csv
 
     # Get unique roll numbers across all CSV files
-    roll_numbers=$(sed '1d' *.csv | awk -F, 'NR>1 {print $1}' | grep -v 'Roll_Number' | sort | uniq)
+    roll_numbers=$(sed '1d' *.csv | awk -F, 'NR>1 {print toupper($1)}' | grep -v 'ROLL_NUMBER' | sort | uniq)
 
     # Iterate over unique roll numbers
     for roll_number in $roll_numbers; do
         # Initialize row for the current roll number
         row="$roll_number"
+        roll_number_lower=$(echo "$roll_number" | tr '[:upper:]' '[:lower:]')
 
         # Get the name for the current roll number (assuming names don't vary)
         name=$(awk -F, -v rn="$roll_number" 'NR>1 && $1==rn {print $2; exit}' *.csv | grep -v '^$')
+        if [ -z "$name" ]; then
+            name=$(awk -F, -v rn="$roll_number_lower" 'NR>1 && $1==rn {print $2; exit}' *.csv | grep -v '^$')
+        fi
 
         # If name is not empty, add name to the row
         if [ -n "$name" ]; then
@@ -60,7 +59,6 @@ combine() {
                 if [ "$file" != "main.csv" ]; then
                     # Extract exam name from CSV filename
                     exam=$(echo "$file" | cut -d. -f1)
-
                     # Get marks for the current roll number in the current exam
                     marks=$(awk -F, -v rn="$roll_number" -v ex="$exam" 'NR>1 && $1==rn {print $3}' "$file")
                     row=$(awk '{sub(/\r/,"", $0); print $0}' <<< "$row")
@@ -68,7 +66,12 @@ combine() {
                     if [ -n "$marks" ]; then
                         row="$row,$marks"
                     else
+                        marks=$(awk -F, -v rn="$roll_number_lower" -v ex="$exam" 'NR>1 && $1==rn {print $3}' "$file")
+                        if [ -n "$marks" ]; then
+                            row="$row,$marks"
+                        else
                         row="$row,a"
+                        fi
                     fi
                 fi
             done
@@ -123,7 +126,14 @@ git_commit() {
             echo "Error: Git repository not initialized. Please run 'bash submission.sh git_init <remote_dir_path>' first."
         elif [[ "${args[1]}" == "-m" ]]; then
             commit_message="${args[2]}"
-            random_hash=$(LC_ALL=C tr -dc '0-9' < /dev/urandom | head -c 16)  # Generate random 16-digit hash
+            
+            # Generate a unique random hash value
+            while true; do
+                random_hash=$(LC_ALL=C tr -dc '0-9' < /dev/urandom | head -c 16)  # Generate random 16-digit hash
+                if ! grep -q "^$random_hash:" "$git_dir/.git_log"; then
+                    break  # Exit the loop if the hash is unique
+                fi
+            done
             
             # Get the commit time with seconds included
             commit_time=$(date +"%Y-%m-%d %H:%M:%S")
@@ -132,11 +142,10 @@ git_commit() {
                 modified_files=$(ls -1)  # List all files in the directory
             else
                 # Find modified files since last commit
-                last_commit_time=$(tail -n 1 "$git_dir/.git_commit_time" | awk '{print $3}')
+                last_commit_time=$(tail -n 1 "$git_dir/.git_commit_time" | awk '{print $2, $3, $4}')
                 modified_files=$(find . -type f -newermt "$last_commit_time" | sed 's|^\./||')
             fi
 
-            
             mkdir -p "$git_dir/$random_hash"  # Create directory for storing files at this commit
             cp -r * "$git_dir/$random_hash"  # Copy all files to commit directory
 
@@ -146,7 +155,6 @@ git_commit() {
             done
             echo "$random_hash: $commit_time" >> "$git_dir/.git_commit_time"  # Store commit time
             echo "$random_hash: $commit_message" >> "$git_dir/.git_log"  # Append commit hash and message to .git_log
-            
 
             echo "Files committed successfully."
         else
@@ -156,6 +164,8 @@ git_commit() {
         echo "Incorrect number of arguments"
     fi
 }
+
+
 
 git_checkout() {
     git_log="$git_dir/.git_log"
@@ -205,8 +215,6 @@ git_checkout() {
         echo "Error: Git repository not initialized. Please run 'bash submission.sh git_init <remote_dir_path>' first."
     fi
 }
-
-
 
 
 # Execute the appropriate command
