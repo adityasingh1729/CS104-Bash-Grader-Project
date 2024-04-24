@@ -216,6 +216,70 @@ git_checkout() {
     fi
 }
 
+update() {
+    if [ "$num_args" -eq 1 ]; then
+        # Input student's name and roll number
+        read -p "Enter student's name: " student_name
+        read -p "Enter student's roll number: " student_roll
+
+        student_roll=$(echo "$student_roll" | tr '[:lower:]' '[:upper:]')
+        student_roll_lower=$(echo "$student_roll" | tr '[:upper:]' '[:lower:]')
+
+        # Check if the roll number exists in main.csv
+        if ! grep -q "^$student_roll," main.csv; then
+            echo "Error: Roll number '$student_roll' not found."
+            return 1
+        fi
+
+        # Check if the provided name matches the roll number row
+        if ! awk -F, -v rn="$student_roll" -v name="$student_name" 'BEGIN {found=0} $1==rn && $2==name {found=1; exit} END {exit !found}' main.csv; then
+            echo "Error: Name '$student_name' does not match roll number '$student_roll'."
+            return 1
+        fi
+
+        # Display exams and ask which ones to update
+        echo "Exams:"
+        awk -F, 'NR==1{for(i=3;i<=NF;i++) print $i}' main.csv | grep -v "total"
+        read -p "Enter exams to update (comma-separated): " exams_to_update
+
+        # Iterate over selected exams and update marks
+        for exam in $(echo "$exams_to_update" | tr ',' ' '); do
+            # Check if the exam CSV file exists
+            if [ -f "$exam.csv" ]; then
+                # Check if the student's roll number is in the exam CSV file
+                if grep -q "^$student_roll," "$exam.csv"; then
+                    # Ask for new marks
+                    read -p "Enter marks for $exam: " new_marks
+                    # Update marks for existing student in the exam CSV file
+                    awk -F, -v rn="$student_roll" -v mk="$new_marks" 'BEGIN {OFS=","} $1==rn {$3=mk} 1' "$exam.csv" > temp.csv && mv temp.csv "$exam.csv"
+                elif grep -q "^$student_roll_lower," "$exam.csv"; then
+                    # Ask for new marks
+                    read -p "Enter marks for $exam: " new_marks
+                    # Update marks for existing student in the exam CSV file
+                    awk -F, -v rn="$student_roll_lower" -v mk="$new_marks" 'BEGIN {OFS=","} $1==rn {$3=mk} 1' "$exam.csv" > temp.csv && mv temp.csv "$exam.csv"
+                else
+                    # Add a new row for the student in the exam CSV file with new marks
+                    read -p "Enter marks for $exam: " new_marks
+
+                    # Check if the file ends with a newline
+                    if [ -n "$(tail -c 1 "$exam.csv")" ]; then
+                        echo "" >> "$exam.csv"  # Add a newline if missing
+                    fi
+                    echo "$student_roll,$student_name,$new_marks" >> "$exam.csv"
+                fi
+            else
+                # Display an error message if the exam CSV file doesn't exist
+                echo "Error: Exam CSV file '$exam.csv' not found."
+            fi
+        done
+
+        # Run the combine function to update main.csv
+        combine
+    else
+        echo "Incorrect number of arguments"
+    fi
+}
+
 
 # Execute the appropriate command
 case $command in
@@ -236,6 +300,9 @@ case $command in
         ;;
     "git_checkout")
         git_checkout
+        ;;
+    "update")
+        update
         ;;
     *)
         echo "Invalid command. Usage: bash submission.sh <command> <extra arguments>"
