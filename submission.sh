@@ -1,17 +1,16 @@
 #!/bin/bash
 
 # Define the command-line arguments
-command=$1
-args=("$@")
-num_args="$#"
+command=$1  # Store the first argument as the command
+args=("$@")  # Store all command-line arguments in an array
+num_args="$#"  # Count the total number of arguments
 
+# Function to calculate total marks for each student in main.csv
 total() {
     # Check if "total" column exists in main.csv header
     if ! head -n 1 main.csv | grep -q ",total"; then
-
-    # Calculate total marks for each student and add as a new row in main.csv
+        # Calculate total marks for each student and add as a new row in main.csv
         awk -F, 'NR==1{print $0",total"; next} {total=0; for(i=3;i<=NF;i++) total+=$i; sub(/\r/,"", $0); print $0 "," total}' main.csv > temp.csv
-
         # Replace main.csv with updated version
         mv temp.csv main.csv
     fi
@@ -20,12 +19,13 @@ total() {
 # Function to combine CSV files into main.csv
 combine() {
     # Initialize main.csv with header based on existing CSV files
-    isTotal=0
+    isTotal=0  # Flag to check if "total" column exists
     if [ -f "main.csv" ]; then
         if head -n 1 main.csv | grep -q ",total"; then
             isTotal=1
         fi
     fi
+    # Making the header row
     header="Roll_Number,Name"
     for file in *.csv; do
         if [ "$file" != "main.csv" ]; then
@@ -70,7 +70,7 @@ combine() {
                         if [ -n "$marks" ]; then
                             row="$row,$marks"
                         else
-                        row="$row,a"
+                            row="$row,a"
                         fi
                     fi
                 fi
@@ -85,10 +85,11 @@ combine() {
     fi
 }
 
+# Function to upload a file to the current directory
 upload() {
     if [[ "$num_args" -eq 2 ]]; then
         if [ -n "${args[1]}" ]; then
-            cp "${args[1]}" .
+            cp "${args[1]}" .  # Copy the specified file to the current directory
             echo "File uploaded successfully."
         else
             echo "Error: Missing file path. Usage: bash submission.sh upload <file_path>"
@@ -98,12 +99,7 @@ upload() {
     fi
 }
 
-git_dir=""
-storeFolder=".hidden"
-if [ -f "$storeFolder" ]; then
-    read -r git_dir < "$storeFolder"
-fi
-
+# Function to initialize a Git repository
 git_init() {
     if [ "$num_args" -eq 2 ]; then
         remote_dir="${args[1]}"
@@ -120,13 +116,13 @@ git_init() {
     fi
 }
 
+# Function to commit changes to the Git repository
 git_commit() {
     if [[ "$num_args" -eq 3 ]]; then
         if [ ! -f "$storeFolder" ]; then
             echo "Error: Git repository not initialized. Please run 'bash submission.sh git_init <remote_dir_path>' first."
         elif [[ "${args[1]}" == "-m" ]]; then
             commit_message="${args[2]}"
-            
             # Generate a unique random hash value
             while true; do
                 random_hash=$(LC_ALL=C tr -dc '0-9' < /dev/urandom | head -c 16)  # Generate random 16-digit hash
@@ -134,7 +130,6 @@ git_commit() {
                     break  # Exit the loop if the hash is unique
                 fi
             done
-            
             # Get the commit time with seconds included
             commit_time=$(date +"%Y-%m-%d %H:%M:%S")
             # Check if it's the first commit (no previous commit to compare with)
@@ -145,17 +140,14 @@ git_commit() {
                 last_commit_time=$(tail -n 1 "$git_dir/.git_commit_time" | awk '{print $2, $3, $4}')
                 modified_files=$(find . -type f -newermt "$last_commit_time" | sed 's|^\./||')
             fi
-
             mkdir -p "$git_dir/$random_hash"  # Create directory for storing files at this commit
             cp -r * "$git_dir/$random_hash"  # Copy all files to commit directory
-
             # Print modified files
             for file in $modified_files; do
                 echo "Modified file: $file"
             done
             echo "$random_hash: $commit_time" >> "$git_dir/.git_commit_time"  # Store commit time
             echo "$random_hash: $commit_message" >> "$git_dir/.git_log"  # Append commit hash and message to .git_log
-
             echo "Files committed successfully."
         else
             echo "Error: Missing commit message. Usage: bash submission.sh git_commit -m 'commit_message'"
@@ -165,8 +157,7 @@ git_commit() {
     fi
 }
 
-
-
+# Function to check out a specific commit in the Git repository
 git_checkout() {
     git_log="$git_dir/.git_log"
     if [ -f "$storeFolder" ]; then
@@ -202,11 +193,10 @@ git_checkout() {
             echo "Incorrect number of arguments"
             return 1
         fi
-
         commit_dir="$git_dir/$hash_value"
         if [ -d "$commit_dir" ]; then
-            rm *.csv
-            cp "$commit_dir"/*.csv .
+            rm *.csv  # Remove existing CSV files
+            cp "$commit_dir"/*.csv .  # Copy CSV files from the commit directory
             echo "Checked out to commit $hash_value."
         else
             echo "Error: Commit not found."
@@ -216,6 +206,7 @@ git_checkout() {
     fi
 }
 
+# Function to update marks for a student in main.csv and individual exam CSV files
 update() {
     if [ "$num_args" -eq 1 ]; then
         # Input student's name and roll number
@@ -260,11 +251,11 @@ update() {
                 else
                     # Add a new row for the student in the exam CSV file with new marks
                     read -p "Enter marks for $exam: " new_marks
-
                     # Check if the file ends with a newline
                     if [ -n "$(tail -c 1 "$exam.csv")" ]; then
                         echo "" >> "$exam.csv"  # Add a newline if missing
                     fi
+                    # Append new student data to the exam CSV file
                     echo "$student_roll,$student_name,$new_marks" >> "$exam.csv"
                 fi
             else
@@ -280,8 +271,103 @@ update() {
     fi
 }
 
+plot_marks() {
+    if [ "$num_args" -eq 1 ]; then
+        python3 plot_marks.py main.csv  # Assuming main.csv is the CSV file containing student marks
+    else
+        echo "Incorrect number of arguments"
+    fi
+}
 
-# Execute the appropriate command
+attendance() {
+    if [ "$num_args" -eq 1 ]; then
+        python3 attendance.py main.csv  # Assuming main.csv is the CSV file containing student marks
+    else
+        echo "Incorrect number of arguments"
+    fi
+}
+
+clustering() {
+    if [ "$num_args" -eq 1 ]; then
+        python3 clustering.py main.csv  # Assuming main.csv is the CSV file containing student marks
+    else
+        echo "Incorrect number of arguments"
+    fi
+}
+
+# Function to calculate statistics and determine the topper
+statistics() {
+    if [ "$num_args" -eq 1 ]; then
+        # Check if main.csv exists
+        if [ ! -f "main.csv" ]; then
+            echo "Error: main.csv not found. Please run 'bash submission.sh combine' to create main.csv."
+            return 1
+        fi
+
+        if ! head -n 1 main.csv | grep -q ",total"; then
+            echo "Error: Total column not found in main.csv. Please run 'bash submission.sh total' to calculate total marks."
+            return 1
+        fi
+
+        # Call the Python script to calculate statistics and determine the topper
+        python3 calculate_statistics.py main.csv
+    else
+        echo "Incorrect number of arguments"
+    fi
+}
+
+# Function to display student information
+student_info() {
+    if [ "$num_args" -eq 2 ]; then
+        student_roll="${args[1]}"
+        # Check if main.csv exists
+        if [ ! -f "main.csv" ]; then
+            echo "Error: main.csv not found. Please run 'bash submission.sh combine' to create main.csv."
+            return 1
+        fi
+
+        # Check if total marks have been calculated
+        if ! head -n 1 main.csv | grep -q ",total"; then
+            echo "Error: Total column not found in main.csv. Please run 'bash submission.sh total' to calculate total marks."
+            return 1
+        fi
+
+        # Check if the student exists in main.csv
+        if ! grep -q "^$student_roll," main.csv; then
+            echo "Error: Student with Roll Number '$student_roll' not found in main.csv."
+            return 1
+        fi
+
+        # Get the student's marks and total from main.csv
+        student_info=$(awk -F, -v roll="$student_roll" 'NR>1 && $1==roll {print $0}' main.csv)
+        student_total=$(echo "$student_info" | awk -F, '{print $NF}')
+        student_name=$(echo "$student_info" | awk -F, '{print $2}')
+        student_marks=$(echo "$student_info" | awk -F, '{for (i=3; i<=NF-1; i++) if ($i!="a") print $i}')
+
+        # Get the number of exams in which the student was absent (marks = 'a')
+        absent_exams=$(echo "$student_info" | awk -F, '{for (i=3; i<=NF-1; i++) if ($i=="a") count++} END {print count}')
+
+        # Calculate the rank of the student based on total marks
+        rank=$(awk -F, -v total="$student_total" '$NF>total {count++} END {print count}' main.csv)
+
+        # Display student information
+        echo "Student Name: $student_name"
+        echo "Roll Number: $student_roll"
+        echo "Rank: $rank"
+        echo "Marks in Each Exam:"
+        awk -F, -v roll="$student_roll" 'NR==1 {for (i=3; i<=NF-1; i++) exams[i]=$i} NR>1 && $1==roll {for (i=3; i<=NF-1; i++) print exams[i] " : " ($i=="a" ? "Absent" : $i)}' main.csv
+        echo "Total Marks: $student_total"
+        echo "Number of Exams Absent: $absent_exams"
+    else
+        echo "Incorrect number of arguments"
+    fi
+}
+
+
+
+
+
+# Execute the appropriate command based on user input
 case $command in
     "combine")
         combine
@@ -304,6 +390,22 @@ case $command in
     "update")
         update
         ;;
+    "plot_marks")
+        plot_marks
+        ;;
+    "attendance")
+        attendance
+        ;;
+    "clustering")
+        clustering
+        ;;
+    "statistics")
+        statistics
+        ;;
+    "student_info")
+        student_info
+        ;;
+
     *)
         echo "Invalid command. Usage: bash submission.sh <command> <extra arguments>"
         ;;
