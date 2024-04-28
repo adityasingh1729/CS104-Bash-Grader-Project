@@ -99,6 +99,8 @@ upload() {
     fi
 }
 
+storeFolder=".hidden"
+
 # Function to initialize a Git repository
 git_init() {
     if [ "$num_args" -eq 2 ]; then
@@ -122,6 +124,7 @@ git_commit() {
         if [ ! -f "$storeFolder" ]; then
             echo "Error: Git repository not initialized. Please run 'bash submission.sh git_init <remote_dir_path>' first."
         elif [[ "${args[1]}" == "-m" ]]; then
+            read -r git_dir < "$storeFolder"
             commit_message="${args[2]}"
             # Generate a unique random hash value
             while true; do
@@ -159,8 +162,9 @@ git_commit() {
 
 # Function to check out a specific commit in the Git repository
 git_checkout() {
-    git_log="$git_dir/.git_log"
     if [ -f "$storeFolder" ]; then
+        read -r git_dir < "$storeFolder"
+        git_log="$git_dir/.git_log"
         if [[ "$num_args" -eq 3 ]]; then
             if [[ "${args[1]}" == "-m" ]]; then
                 commit_message="${args[2]}"
@@ -287,14 +291,6 @@ attendance() {
     fi
 }
 
-clustering() {
-    if [ "$num_args" -eq 1 ]; then
-        python3 clustering.py main.csv  # Assuming main.csv is the CSV file containing student marks
-    else
-        echo "Incorrect number of arguments"
-    fi
-}
-
 # Function to calculate statistics and determine the topper
 statistics() {
     if [ "$num_args" -eq 1 ]; then
@@ -363,6 +359,19 @@ student_info() {
     fi
 }
 
+exam_info() {
+    if [ "$num_args" -eq 2 ]; then
+        exam_name="${args[1]}"
+        if [ "$exam_name" = "total" ]; then
+            echo "Error: 'total' is not a valid exam name."
+        else
+            python3 exam_info.py "$exam_name" main.csv  # Replace main.csv with your CSV file path
+        fi
+    else
+        echo "Incorrect number of arguments"
+    fi
+}
+
 
 
 
@@ -396,8 +405,8 @@ case $command in
     "attendance")
         attendance
         ;;
-    "clustering")
-        clustering
+    "exam_info")
+        exam_info
         ;;
     "statistics")
         statistics
